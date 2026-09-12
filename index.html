@@ -1206,11 +1206,9 @@ document.querySelectorAll(".car-order-btn").forEach(function(btn){
 });
 
 /* ============ REVIEWS ============ */
-let reviews = [
-  {name:"Dinda Ayu", rating:5, text:{id:"Trip ke Kawah Ijen sangat berkesan, pemandu ramah dan informatif!", en:"The Ijen Crater trip was memorable, the guide was friendly and informative!"}},
-  {name:"Bagas Pratama", rating:5, text:{id:"Sewa mobil dengan supir sangat membantu, mobil bersih dan nyaman.", en:"Renting a car with a driver was very helpful, the car was clean and comfortable."}},
-  {name:"Sarah Wulandari", rating:4, text:{id:"Paket honeymoon ke Teluk Hijau romantis banget, recommended!", en:"The honeymoon package to Teluk Hijau was very romantic, highly recommended!"}}
-];
+const SPREADSHEET_URL = "https://script.google.com/macros/s/AKfycbxY9GlTXT4nNLNy4LyVpV63ngxNEZAEH5tKeAyoiKH59RqmKuHxnIgIOyAopwBZJ4P3/exec";
+
+let reviews = [];
 
 function starsHTML(n){
   let out = "";
@@ -1234,6 +1232,18 @@ function renderReviews(){
     + '</div>';
   }).join("");
 }
+function loadReviewsFromSheets() {
+  if (!SPREADSHEET_URL) return;
+  fetch(SPREADSHEET_URL)
+    .then(res => res.json())
+    .then(data => {
+      if(Array.isArray(data) && data.length > 0){
+        reviews = data.reverse();
+        renderReviews();
+      }
+    })
+    .catch(err => console.error("Gagal mengambil ulasan:", err));
+}
 
 let selectedStar = 0;
 document.querySelectorAll("#starInput button").forEach(function(btn){
@@ -1248,16 +1258,45 @@ document.querySelectorAll("#starInput button").forEach(function(btn){
 document.getElementById("submitReview").addEventListener("click", function(){
   const name = document.getElementById("reviewName").value.trim();
   const text = document.getElementById("reviewText").value.trim();
+  const submitBtn = this;
+
   if(!name || !text || selectedStar === 0){
     alert(currentLang==="id" ? "Mohon isi nama, rating, dan ulasan terlebih dahulu." : "Please fill in name, rating, and review first.");
     return;
   }
-  reviews.unshift({name:name, rating:selectedStar, text:{id:text, en:text}});
+
+  submitBtn.disabled = true;
+  submitBtn.textContent = currentLang === "id" ? "Mengirim..." : "Submitting...";
+
+  const newReview = { name: name, rating: selectedStar, text: text };
+
+  // Tampilkan ulasan secara instan di UI
+  reviews.unshift(newReview);
   renderReviews();
+
+  // Reset Form
   document.getElementById("reviewName").value = "";
   document.getElementById("reviewText").value = "";
   selectedStar = 0;
   document.querySelectorAll("#starInput button").forEach(function(b){ b.classList.remove("active"); });
+
+  // Kirim data ke Google Sheets di background
+  fetch(SPREADSHEET_URL, {
+    method: "POST",
+    headers: { "Content-Type": "text/plain;charset=utf-8" },
+    body: JSON.stringify(newReview)
+  })
+  .then(res => res.json())
+  .then(() => {
+    alert(currentLang === "id" ? "Ulasan berhasil dikirim!" : "Review submitted successfully!");
+  })
+  .catch(err => {
+    console.error("Gagal simpan ke Sheets:", err);
+  })
+  .finally(() => {
+    submitBtn.disabled = false;
+    submitBtn.textContent = i18n.rev_submit[currentLang];
+  });
 });
 
 /* ============ PAYMENT MODAL ============ */
@@ -1332,7 +1371,7 @@ function observeReveals(){
 document.getElementById("year").textContent = new Date().getFullYear();
 renderDestinations();
 renderPackages();
-renderReviews();
+loadReviewsFromSheets();
 applyLanguage("id");
 observeReveals();
 
